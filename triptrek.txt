@@ -1,0 +1,829 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TripTrek - Your AI Travel & Helper Website</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Showdown.js (Markdown to HTML) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/showdown/2.1.0/showdown.min.js"></script>
+    <!-- Inter Font -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        /* Custom styles for the generated itinerary */
+        #itinerary-result {
+            overflow-wrap: break-word;
+        }
+        #itinerary-result h1 {
+            @apply text-3xl font-bold mt-6 mb-3;
+        }
+        #itinerary-result h2 {
+            @apply text-2xl font-semibold mt-5 mb-2;
+        }
+        #itinerary-result h3 {
+            @apply text-xl font-medium mt-4 mb-1;
+        }
+        #itinerary-result p {
+            @apply text-base text-gray-700 mb-3;
+        }
+        #itinerary-result ul, #itinerary-result ol {
+            @apply list-disc list-inside pl-5 mb-3 text-gray-700;
+        }
+        #itinerary-result li {
+            @apply mb-1;
+        }
+        #itinerary-result strong {
+            @apply font-semibold text-gray-800;
+        }
+        #itinerary-result blockquote {
+            @apply border-l-4 border-blue-500 pl-4 italic text-gray-600 my-4;
+        }
+
+        /* Loading Spinner */
+        .loader {
+            width: 48px;
+            height: 48px;
+            border: 5px solid;
+            border-color: #3b82f6 transparent;
+            border-radius: 50%;
+            display: inline-block;
+            box-sizing: border-box;
+            animation: rotation 1s linear infinite;
+        }
+        @keyframes rotation {
+            0% {
+                transform: rotate(0deg);
+            }
+            100% {
+                transform: rotate(360deg);
+            }
+        }
+        
+        /* Modal Backdrop */
+        .modal-backdrop {
+            @apply fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center;
+        }
+
+        /* Custom Toast Notification */
+        #toast-message {
+            @apply fixed bottom-5 right-5 bg-gray-900 text-white px-5 py-3 rounded-lg shadow-xl translate-x-full transition-transform duration-300;
+        }
+        #toast-message.show {
+            @apply translate-x-0;
+        }
+    </style>
+</head>
+<body class="bg-gray-50 text-gray-900">
+
+    <!-- Header -->
+    <header class="bg-white shadow-sm sticky top-0 z-40">
+        <nav class="container mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-center">
+            <a href="#" class="text-3xl font-bold text-blue-600">
+                TripTrek
+            </a>
+            <div class="hidden md:flex items-center space-x-6">
+                <a href="#" class="text-gray-600 hover:text-blue-600 font-medium">Home</a>
+                <a href="#planner" class="text-gray-600 hover:text-blue-600 font-medium">Plan a Trip</a>
+                <a href="#helpers" class="text-gray-600 hover:text-blue-600 font-medium">Find a Helper</a>
+                <a href="#features" class="text-gray-600 hover:text-blue-600 font-medium">Features</a>
+            </div>
+            <!-- Auth Status -->
+            <div id="auth-container" class="hidden md:flex items-center space-x-3">
+                <span id="auth-status" class="text-sm text-gray-600">Loading...</span>
+                <button id="logout-btn" class="hidden bg-red-500 text-white px-3 py-1 rounded-lg text-sm font-medium hover:bg-red-600 transition-colors">
+                    Logout
+                </button>
+            </div>
+            <button id="mobile-menu-btn" class="md:hidden">
+                <i data-lucide="menu" class="w-6 h-6"></i>
+            </button>
+        </nav>
+        <!-- Mobile Menu -->
+        <div id="mobile-menu" class="md:hidden hidden px-4 pt-2 pb-4 space-y-2">
+            <a href="#" class="block text-gray-600 hover:text-blue-600 font-medium">Home</a>
+            <a href="#planner" class="block text-gray-600 hover:text-blue-600 font-medium">Plan a Trip</a>
+            <a href="#helpers" class="block text-gray-600 hover:text-blue-600 font-medium">Find a Helper</a>
+            <a href="#features" class="block text-gray-600 hover:text-blue-600 font-medium">Features</a>
+            <div id="mobile-auth-container" class="border-t pt-2 mt-2">
+                 <span id="mobile-auth-status" class="text-sm text-gray-600 block mb-2">Loading...</span>
+                <button id="mobile-logout-btn" class="hidden w-full bg-red-500 text-white px-3 py-2 rounded-lg text-sm font-medium hover:bg-red-600 transition-colors">
+                    Logout
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main>
+        <!-- Hero Section -->
+        <section class="relative h-[60vh] min-h-[400px] flex items-center justify-center text-center text-white px-4">
+            <div class="absolute inset-0 bg-black opacity-50 z-10"></div>
+            <img src="https://placehold.co/1600x900/003366/FFFFFF?text=Beautiful+Destination" 
+                 onerror="this.onerror=null;this.src='https://placehold.co/1600x900/003366/FFFFFF?text=TripTrek';"
+                 alt="Beautiful travel destination" 
+                 class="absolute inset-0 w-full h-full object-cover">
+            <div class="relative z-20 max-w-2xl">
+                <h1 class="text-4xl md:text-6xl font-bold mb-4">Your Adventure, Your Way</h1>
+                <p class="text-lg md:text-2xl mb-8">Get AI itineraries and connect with local guides for hidden gems.</p>
+                <a href="#planner" class="bg-blue-600 text-white px-8 py-3 rounded-lg font-bold text-lg hover:bg-blue-700 transition-colors">
+                    Plan Your Trip Now
+                </a>
+            </div>
+        </section>
+
+        <!-- Itinerary Planner Section -->
+        <section id="planner" class="py-16 md:py-24 bg-white">
+            <div class="container mx-auto px-4 sm:px-6 lg:px-8">
+                <div class="max-w-4xl mx-auto">
+                    <h2 class="text-3xl md:text-4xl font-bold text-center mb-10">1. Get Your AI Itinerary</h2>
+                    
+                    <!-- Planner Form -->
+                    <form id="itinerary-form" class="bg-gray-50 p-8 md:p-10 rounded-lg shadow-xl border border-gray-200">
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <!-- Destination -->
+                            <div class="md:col-span-2">
+                                <label for="destination" class="block text-lg font-medium text-gray-700 mb-2">Where are you going?</label>
+                                <input type="text" id="destination" name="destination" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="e.g., Kyoto, Japan" required>
+                            </div>
+                            
+                            <!-- Budget -->
+                            <div>
+                                <label for="budget" class="block text-lg font-medium text-gray-700 mb-2">What's your budget? (INR)</label>
+                                <select id="budget" name="budget" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white" required>
+                                    <option value="₹10,000 - ₹30,000">Budget (₹10k - ₹30k)</option>
+                                    <option value="₹30,000 - ₹70,000">Mid-Range (₹30k - ₹70k)</option>
+                                    <option value="₹70,000+">Luxury (₹70k+)</option>
+                                </select>
+                            </div>
+                            
+                            <!-- Duration -->
+                            <div>
+                                <label for="duration" class="block text-lg font-medium text-gray-700 mb-2">How many days?</label>
+                                <input type="number" id="duration" name="duration" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="e.g., 5" min="1" max="30" required>
+                            </div>
+                        </div>
+
+                        <!-- Interests -->
+                        <div class="mt-8">
+                            <label class="block text-lg font-medium text-gray-700 mb-4">What are your interests?</label>
+                            <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4">
+                                <div>
+                                    <input type="checkbox" id="interest-culture" name="interest" value="Culture" class="hidden peer">
+                                    <label for="interest-culture" class="block w-full text-center px-4 py-3 border border-gray-300 rounded-lg cursor-pointer font-medium text-gray-600 peer-checked:bg-blue-600 peer-checked:text-white peer-checked:border-blue-600 transition-colors">Culture</label>
+                                </div>
+                                <div>
+                                    <input type="checkbox" id="interest-adventure" name="interest" value="Adventure" class="hidden peer">
+                                    <label for="interest-adventure" class="block w-full text-center px-4 py-3 border border-gray-300 rounded-lg cursor-pointer font-medium text-gray-600 peer-checked:bg-blue-600 peer-checked:text-white peer-checked:border-blue-600 transition-colors">Adventure</label>
+                                </div>
+                                <div>
+                                    <input type="checkbox" id="interest-food" name="interest" value="Food" class="hidden peer">
+                                    <label for="interest-food" class="block w-full text-center px-4 py-3 border border-gray-300 rounded-lg cursor-pointer font-medium text-gray-600 peer-checked:bg-blue-600 peer-checked:text-white peer-checked:border-blue-600 transition-colors">Food</label>
+                                </div>
+                                <div>
+                                    <input type="checkbox" id="interest-relaxation" name="interest" value="Relaxation" class="hidden peer">
+                                    <label for="interest-relaxation" class="block w-full text-center px-4 py-3 border border-gray-300 rounded-lg cursor-pointer font-medium text-gray-600 peer-checked:bg-blue-600 peer-checked:text-white peer-checked:border-blue-600 transition-colors">Relaxation</label>
+                                </div>
+                                <div>
+                                    <input type="checkbox" id="interest-nightlife" name="interest" value="Nightlife" class="hidden peer">
+                                    <label for="interest-nightlife" class="block w-full text-center px-4 py-3 border border-gray-300 rounded-lg cursor-pointer font-medium text-gray-600 peer-checked:bg-blue-600 peer-checked:text-white peer-checked:border-blue-600 transition-colors">Nightlife</label>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Submit Button -->
+                        <div class="mt-10 text-center">
+                            <button type="submit" id="generate-btn" class="bg-blue-600 text-white text-lg font-bold px-10 py-4 rounded-lg hover:bg-blue-700 transition-colors w-full md:w-auto">
+                                Generate My Itinerary
+                            </button>
+                        </div>
+                    </form>
+                    
+                    <!-- Itinerary Result Area -->
+                    <div id="itinerary-result-container" class="mt-12 bg-white p-8 md:p-10 rounded-lg shadow-xl" style="display: none;">
+                        <h3 class="text-3xl font-bold text-center mb-8">Your Custom Itinerary</h3>
+                        
+                        <!-- Loading State -->
+                        <div id="loading-spinner" class="text-center py-10" style="display: none;">
+                            <div class="loader mx-auto"></div>
+                            <p class="text-lg text-gray-600 mt-4 font-medium">Crafting your perfect trip...</p>
+                        </div>
+
+                        <!-- Error Message -->
+                        <div id="error-message" class="text-center py-10 bg-red-100 text-red-700 p-4 rounded-lg" style="display: none;">
+                            <p class="font-bold">Oops! Something went wrong.</p>
+                            <p>We couldn't generate your itinerary at this time. Please try again later.</p>
+                        </div>
+                        
+                        <!-- Result Content -->
+                        <div id="itinerary-result">
+                            <!-- Generated content will appear here -->
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+        </section>
+
+        <!-- NEW: Local Helper Section -->
+        <section id="helpers" class="py-16 md:py-24 bg-gray-50">
+            <div class="container mx-auto px-4 sm:px-6 lg:px-8">
+                <div class="max-w-5xl mx-auto text-center">
+                    <h2 class="text-3xl md:text-4xl font-bold mb-4">2. Connect with Local Experts</h2>
+                    <p class="text-lg text-gray-600 mb-10 max-w-2xl mx-auto">Find a local helper to discover hidden gems, "undefined" places, and authentic experiences on your next trip.</p>
+                    
+                    <!-- Helper List -->
+                    <div id="helper-list" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 text-left">
+                        <!-- Helper cards will be injected here by JavaScript -->
+                        <p id="helpers-loading" class="md:col-span-3 text-gray-500">Loading helpers...</p>
+                    </div>
+
+                    <!-- Seed Helpers Button (for demo) -->
+                    <div class="mt-10">
+                        <button id="seed-helpers-btn" class="bg-green-600 text-white px-6 py-2 rounded-lg font-medium hover:bg-green-700 transition-colors">
+                            Seed Demo Helpers
+                        </button>
+                        <p class="text-sm text-gray-500 mt-2">(First-time only: Click this to add demo data)</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Features Section -->
+        <section id="features" class="py-16 md:py-24 bg-white">
+            <div class="container mx-auto px-4 sm:px-6 lg:px-8 text-center">
+                <h2 class="text-3xl md:text-4xl font-bold mb-4">Why Plan with TripTrek?</h2>
+                <p class="text-lg text-gray-600 mb-12 max-w-2xl mx-auto">We take the stress out of travel planning so you can focus on the adventure.</p>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+                    <!-- Feature 1 -->
+                    <div class="bg-gray-50 p-8 rounded-lg shadow-md">
+                        <div class="bg-blue-100 text-blue-600 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-6">
+                            <i data-lucide="brain-circuit" class="w-8 h-8"></i>
+                        </div>
+                        <h3 class="text-2xl font-semibold mb-3">AI-Powered Itineraries</h3>
+                        <p class="text-gray-600">Our smart AI crafts unique plans based on your budget, duration, and interests.</p>
+                    </div>
+                    <!-- Feature 2 -->
+                    <div class="bg-gray-50 p-8 rounded-lg shadow-md">
+                        <div class="bg-blue-100 text-blue-600 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-6">
+                            <i data-lucide="compass" class="w-8 h-8"></i>
+                        </div>
+                        <h3 class="text-2xl font-semibold mb-3">Local Guides</h3>
+                        <p class="text-gray-600">Connect with real locals to find hidden places and authentic experiences.</p>
+                    </div>
+                    <!-- Feature 3 -->
+                    <div class="bg-gray-50 p-8 rounded-lg shadow-md">
+                        <div class="bg-blue-100 text-blue-600 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-6">
+                            <i data-lucide="piggy-bank" class="w-8 h-8"></i>
+                        </div>
+                        <h3 class="text-2xl font-semibold mb-3">Budget-Friendly</h3>
+                        <p class="text-gray-600">Get AI plans and local tips that help you save money and travel smarter.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- Footer -->
+    <footer class="bg-gray-800 text-gray-300 py-12">
+        <div class="container mx-auto px-4 sm:px-6 lg:px-8">
+            <!-- Footer content remains the same -->
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+                <div>
+                    <h4 class="text-2xl font-bold text-white mb-4">TripTrek</h4>
+                    <p class="text-gray-400">Your AI-powered travel planning assistant.</p>
+                </div>
+                <div>
+                    <h5 class="text-lg font-semibold text-white mb-3">Quick Links</h5>
+                    <ul class="space-y-2">
+                        <li><a href="#" class="hover:text-white">Home</a></li>
+                        <li><a href="#planner" class="hover:text-white">Plan a Trip</a></li>
+                        <li><a href="#helpers" class="hover:text-white">Find a Helper</a></li>
+                        <li><a href="#features" class="hover:text-white">Features</a></li>
+                    </ul>
+                </div>
+                <div>
+                    <h5 class="text-lg font-semibold text-white mb-3">Legal</h5>
+                    <ul class="space-y-2">
+                        <li><a href="#" class="hover:text-white">Privacy Policy</a></li>
+                        <li><a href="#" class="hover:text-white">Terms of Service</a></li>
+                    </ul>
+                    <div class="flex space-x-4 mt-4">
+                        <a href="#" class="text-gray-400 hover:text-white"><i data-lucide="facebook" class="w-6 h-6"></i></a>
+                        <a href="#" class="text-gray-400 hover:text-white"><i data-lucide="instagram" class="w-6 h-6"></i></a>
+                        <a href="#" class="text-gray-400 hover:text-white"><i data-lucide="twitter" class="w-6 h-6"></i></a>
+                    </div>
+                </div>
+            </div>
+            <div class="border-t border-gray-700 mt-8 pt-6 text-center">
+                <p class="text-gray-400">&copy; 2025 TripTrek. All rights reserved.</p>
+            </div>
+        </div>
+    </footer>
+    
+    <!-- NEW: Message Modal -->
+    <div id="message-modal" class="modal-backdrop hidden">
+        <div class="bg-white p-8 rounded-lg shadow-2xl w-full max-w-lg mx-4">
+            <div class="flex justify-between items-center mb-6">
+                <h3 class="text-2xl font-semibold">Send a message to <span id="modal-helper-name" class="text-blue-600"></span></h3>
+                <button id="close-modal-btn" class="text-gray-500 hover:text-gray-800">
+                    <i data-lucide="x" class="w-7 h-7"></i>
+                </button>
+            </div>
+            <form id="message-form">
+                <input type="hidden" id="modal-helper-id">
+                <div>
+                    <label for="message-text" class="block text-lg font-medium text-gray-700 mb-2">Your Message</label>
+                    <textarea id="message-text" name="message-text" rows="5" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Ask about hidden places, their specialty, or availability..." required></textarea>
+                </div>
+                <div class="mt-6 text-right">
+                    <button type="submit" id="send-message-btn" class="bg-blue-600 text-white text-lg font-semibold px-8 py-3 rounded-lg hover:bg-blue-700 transition-colors">
+                        Send Message
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+    
+    <!-- NEW: Toast Notification -->
+    <div id="toast-message">
+        <!-- Message will be injected here -->
+    </div>
+
+    <!-- Firebase SDKs -->
+    <script type="module">
+        // Import Firebase modules
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { 
+            getAuth, 
+            signInAnonymously, 
+            signInWithCustomToken, 
+            onAuthStateChanged,
+            signOut
+        } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { 
+            getFirestore, 
+            doc, 
+            setDoc, 
+            addDoc, 
+            collection, 
+            getDocs,
+            onSnapshot,
+            query,
+            Timestamp,
+            setLogLevel
+        } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // --- Global Variables ---
+        let db, auth, userId, isAuthReady = false;
+        
+        // Get app-specific config from the environment
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
+        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+        
+        // --- Initialize Firebase ---
+        try {
+            const app = initializeApp(firebaseConfig);
+            auth = getAuth(app);
+            db = getFirestore(app);
+            setLogLevel('Debug'); // Enable Firestore logging
+            console.log("Firebase initialized.");
+            initAuthentication();
+        } catch (error) {
+            console.error("Error initializing Firebase:", error);
+            updateAuthStatusUI("Firebase init failed.");
+        }
+
+        /**
+         * Handles user authentication state
+         */
+        function initAuthentication() {
+            onAuthStateChanged(auth, user => {
+                if (user) {
+                    userId = user.uid;
+                    isAuthReady = true;
+                    console.log("User is signed in:", userId);
+                    updateAuthStatusUI(`User: ${userId.substring(0, 8)}...`);
+                    // Load dynamic content now that user is authenticated
+                    loadHelpers();
+                } else {
+                    userId = null;
+                    isAuthReady = false;
+                    console.log("User is signed out.");
+                    updateAuthStatusUI("Not signed in.");
+                    // Attempt to sign in
+                    signInUser();
+                }
+            });
+        }
+        
+        /**
+         * Tries to sign in with custom token or anonymously
+         */
+        async function signInUser() {
+            try {
+                if (initialAuthToken) {
+                    console.log("Attempting sign in with custom token...");
+                    await signInWithCustomToken(auth, initialAuthToken);
+                } else {
+                    console.log("Attempting anonymous sign in...");
+                    await signInAnonymously(auth);
+                }
+            } catch (error) {
+                console.error("Error signing in:", error);
+                updateAuthStatusUI("Auth failed.");
+            }
+        }
+        
+        /**
+         * Handles user logout
+         */
+        async function handleLogout() {
+            try {
+                await signOut(auth);
+                // This will trigger onAuthStateChanged, which updates UI
+                // But we'll try to sign in again anonymously
+                console.log("User signed out.");
+            } catch (error)
+            {
+                console.error("Error signing out:", error);
+            }
+        }
+
+        /**
+         * Updates all auth-related UI elements
+         */
+        function updateAuthStatusUI(statusText) {
+            const authStatus = document.getElementById('auth-status');
+            const mobileAuthStatus = document.getElementById('mobile-auth-status');
+            const logoutBtn = document.getElementById('logout-btn');
+            const mobileLogoutBtn = document.getElementById('mobile-logout-btn');
+
+            if (authStatus) authStatus.innerText = statusText;
+            if (mobileAuthStatus) mobileAuthStatus.innerText = statusText;
+
+            if (isAuthReady) {
+                if (logoutBtn) logoutBtn.classList.remove('hidden');
+                if (mobileLogoutBtn) mobileLogoutBtn.classList.remove('hidden');
+            } else {
+                if (logoutBtn) logoutBtn.classList.add('hidden');
+                if (mobileLogoutBtn) mobileLogoutBtn.classList.add('hidden');
+            }
+        }
+        
+        /**
+         * Adds dummy helper data to Firestore (for demo)
+         */
+        async function seedHelpers() {
+            if (!isAuthReady) {
+                showToast("Please wait, still authenticating...");
+                return;
+            }
+            
+            showToast("Adding demo helpers...");
+            const helpersCollectionRef = collection(db, `artifacts/${appId}/public/data/helpers`);
+
+            // UPDATED: Helpers are now Indian locals
+            const dummyHelpers = [
+                {
+                    name: "Rohan Sharma",
+                    location: "Manali, Himachal Pradesh",
+                    bio: "I'm a certified trekking guide and mountain photographer. I'll take you off the beaten path in the Himalayas to breathtaking, 'undefined' peaks and shepherd trails.",
+                    specialties: ["Adventure", "Trekking", "Nature"],
+                    img: "https://placehold.co/600x400/93C5FD/1D4ED8?text=Rohan" // Placeholder for visual identity
+                },
+                {
+                    name: "Priya Menon",
+                    location: "Kochi, Kerala",
+                    bio: "A Kochi native and foodie. Let's explore the hidden backwaters in a traditional canoe and find the best home-cooked Kerala cuisine that tourists rarely taste.",
+                    specialties: ["Food", "Culture", "Backwaters"],
+                    img: "https://placehold.co/600x400/FDE68A/B45309?text=Priya" // Placeholder for visual identity
+                },
+                {
+                    name: "Vikram Singh",
+                    location: "Jaipur, Rajasthan",
+                    bio: "I know the pink city like the back of my hand. Forget the main forts; I'll show you secret havelis and bustling local markets to find authentic Rajasthani crafts.",
+                    specialties: ["History", "Shopping", "Architecture"],
+                    img: "https://placehold.co/600x400/FBCFE8/9D174D?text=Vikram" // Placeholder for visual identity
+                }
+            ];
+
+            try {
+                // Check if helpers already exist to avoid duplicates
+                const existingHelpers = await getDocs(helpersCollectionRef);
+                if (!existingHelpers.empty) {
+                    showToast("Demo helpers already exist!");
+                    return;
+                }
+
+                for (const helper of dummyHelpers) {
+                    await addDoc(helpersCollectionRef, helper);
+                }
+                showToast("Demo helpers added successfully!");
+                // loadHelpers will be called automatically by onSnapshot
+            } catch (error) {
+                console.error("Error seeding helpers:", error);
+                showToast("Error adding helpers.");
+            }
+        }
+
+        /**
+         * Loads and displays helper profiles from Firestore in real-time
+         */
+        function loadHelpers() {
+            if (!isAuthReady) return;
+            
+            const helperListDiv = document.getElementById('helper-list');
+            const loadingP = document.getElementById('helpers-loading');
+            const helpersCollectionRef = collection(db, `artifacts/${appId}/public/data/helpers`);
+            
+            const q = query(helpersCollectionRef);
+
+            onSnapshot(q, (snapshot) => {
+                if (snapshot.empty) {
+                    if(loadingP) loadingP.innerText = "No local helpers found. Try seeding demo data!";
+                    helperListDiv.innerHTML = ''; // Clear list
+                } else {
+                    if(loadingP) loadingP.style.display = 'none';
+                    helperListDiv.innerHTML = ''; // Clear list before repopulating
+                    
+                    snapshot.forEach(doc => {
+                        const helper = doc.data();
+                        const helperId = doc.id;
+                        const card = createHelperCard(helper, helperId);
+                        helperListDiv.appendChild(card);
+                    });
+                    
+                    // Re-run lucide to render new icons
+                    lucide.createIcons();
+                }
+            }, (error) => {
+                console.error("Error loading helpers:", error);
+                if(loadingP) loadingP.innerText = "Error loading helpers.";
+            });
+        }
+        
+        /**
+         * Creates the HTML element for a single helper card
+         */
+        function createHelperCard(helper, helperId) {
+            const card = document.createElement('div');
+            card.className = "bg-white p-6 rounded-lg shadow-lg border border-gray-200 flex flex-col";
+            
+            let specialtiesHTML = '';
+            if (helper.specialties && helper.specialties.length > 0) {
+                specialtiesHTML = helper.specialties.map(s => 
+                    `<span class="bg-blue-100 text-blue-800 text-xs font-medium px-2.5 py-0.5 rounded-full">${s}</span>`
+                ).join(' ');
+            }
+
+            card.innerHTML = `
+                <img src="${helper.img}" alt="${helper.name}" class="w-full h-48 object-cover rounded-md mb-4" onerror="this.onerror=null;this.src='https://placehold.co/600x400/CCCCCC/FFFFFF?text=Helper';">
+                <h4 class="text-2xl font-bold text-gray-800 mb-1">${helper.name}</h4>
+                <div class="flex items-center text-gray-500 mb-3">
+                    <i data-lucide="map-pin" class="w-4 h-4 mr-2"></i>
+                    <span>${helper.location}</span>
+                </div>
+                <p class="text-gray-600 mb-4 flex-grow">${helper.bio}</p>
+                <div class="flex flex-wrap gap-2 mb-6">
+                    ${specialtiesHTML}
+                </div>
+                <button class="contact-helper-btn mt-auto w-full bg-blue-600 text-white px-5 py-3 rounded-lg font-semibold hover:bg-blue-700 transition-colors" data-helper-id="${helperId}" data-helper-name="${helper.name}">
+                    Contact ${helper.name.split(' ')[0]}
+                </button>
+            `;
+            return card;
+        }
+        
+        /**
+         * Opens the message modal
+         */
+        function openMessageModal(helperId, helperName) {
+            document.getElementById('modal-helper-id').value = helperId;
+            document.getElementById('modal-helper-name').innerText = helperName;
+            document.getElementById('message-modal').classList.remove('hidden');
+        }
+
+        /**
+         * Closes the message modal
+         */
+        function closeMessageModal() {
+            document.getElementById('message-modal').classList.add('hidden');
+            document.getElementById('message-form').reset();
+        }
+        
+        /**
+         * Handles the submission of the message form
+         */
+        async function handleSendMessage(e) {
+            e.preventDefault();
+            if (!isAuthReady || !userId) {
+                showToast("You must be signed in to send a message.");
+                return;
+            }
+            
+            const helperId = document.getElementById('modal-helper-id').value;
+            const messageText = document.getElementById('message-text').value;
+            const sendBtn = document.getElementById('send-message-btn');
+
+            sendBtn.disabled = true;
+            sendBtn.innerText = 'Sending...';
+
+            try {
+                // Store message in a public collection for this app
+                const messagesCollectionRef = collection(db, `artifacts/${appId}/public/data/messages`);
+                await addDoc(messagesCollectionRef, {
+                    senderId: userId,
+                    receiverId: helperId,
+                    message: messageText,
+                    timestamp: Timestamp.now(),
+                    read: false
+                });
+                
+                showToast("Message sent successfully!");
+                closeMessageModal();
+
+            } catch (error) {
+                console.error("Error sending message:", error);
+                showToast("Error sending message. Please try again.");
+            } finally {
+                sendBtn.disabled = false;
+                sendBtn.innerText = 'Send Message';
+            }
+        }
+        
+        /**
+         * Shows a toast notification
+         */
+        function showToast(message) {
+            const toast = document.getElementById('toast-message');
+            toast.innerText = message;
+            toast.classList.add('show');
+            setTimeout(() => {
+                toast.classList.remove('show');
+            }, 3000);
+        }
+
+        // --- Event Listeners ---
+        document.addEventListener('DOMContentLoaded', () => {
+            // --- Lucide Icons ---
+            lucide.createIcons();
+
+            // --- Mobile Menu Toggle ---
+            const mobileMenuBtn = document.getElementById('mobile-menu-btn');
+            const mobileMenu = document.getElementById('mobile-menu');
+            if (mobileMenuBtn) {
+                mobileMenuBtn.addEventListener('click', () => {
+                    mobileMenu.classList.toggle('hidden');
+                });
+            }
+
+            // --- Logout Buttons ---
+            document.getElementById('logout-btn').addEventListener('click', handleLogout);
+            document.getElementById('mobile-logout-btn').addEventListener('click', handleLogout);
+
+            // --- Seed Helpers Button ---
+            document.getElementById('seed-helpers-btn').addEventListener('click', seedHelpers);
+            
+            // --- Message Modal ---
+            document.getElementById('close-modal-btn').addEventListener('click', closeMessageModal);
+            document.getElementById('message-form').addEventListener('submit', handleSendMessage);
+
+            // --- Helper Contact Button (Event Delegation) ---
+            document.getElementById('helper-list').addEventListener('click', (e) => {
+                const button = e.target.closest('.contact-helper-btn');
+                if (button) {
+                    const helperId = button.dataset.helperId;
+                    const helperName = button.dataset.helperName;
+                    openMessageModal(helperId, helperName);
+                }
+            });
+
+            // --- Itinerary Form Logic (from previous step) ---
+            const form = document.getElementById('itinerary-form');
+            const resultContainer = document.getElementById('itinerary-result-container');
+            const resultDiv = document.getElementById('itinerary-result');
+            const loadingSpinner = document.getElementById('loading-spinner');
+            const errorMessageDiv = document.getElementById('error-message');
+            const generateBtn = document.getElementById('generate-btn');
+
+            const converter = new showdown.Converter({
+                omitExtraWLInCodeBlocks: true,
+                simplifiedAutoLink: true,
+                strikethrough: true,
+                tables: true,
+                tasklists: true
+            });
+
+            if (form) {
+                form.addEventListener('submit', async (e) => {
+                    e.preventDefault();
+                    
+                    const destination = document.getElementById('destination').value;
+                    const budget = document.getElementById('budget').value;
+                    const duration = document.getElementById('duration').value;
+                    const selectedInterests = Array.from(document.querySelectorAll('input[name="interest"]:checked'))
+                                                  .map(el => el.value);
+                    const interests = selectedInterests.length > 0 ? selectedInterests.join(', ') : 'general sightseeing';
+
+                    resultContainer.style.display = 'block';
+                    loadingSpinner.style.display = 'block';
+                    errorMessageDiv.style.display = 'none';
+                    resultDiv.innerHTML = '';
+                    generateBtn.disabled = true;
+                    generateBtn.classList.add('opacity-50', 'cursor-not-allowed');
+                    generateBtn.innerText = 'Generating...';
+
+                    try {
+                        const itineraryMarkdown = await fetchItinerary(destination, budget, duration, interests);
+                        const itineraryHtml = converter.makeHtml(itineraryMarkdown);
+                        resultDiv.innerHTML = itineraryHtml;
+                        loadingSpinner.style.display = 'none';
+                    } catch (error) {
+                        console.error('Error fetching itinerary:', error);
+                        loadingSpinner.style.display = 'none';
+                        errorMessageDiv.style.display = 'block';
+                    } finally {
+                        generateBtn.disabled = false;
+                        generateBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+                        generateBtn.innerText = 'Generate My Itinerary';
+                    }
+                });
+            }
+        }); // End DOMContentLoaded
+
+        /**
+         * Fetches the itinerary from the Gemini API with exponential backoff.
+         */
+        async function fetchItinerary(destination, budget, duration, interests) {
+            const systemPrompt = "You are TripTrek, an expert travel planning assistant. Your goal is to create a detailed, helpful, and inspiring travel itinerary. The user wants a plan for their trip. You MUST format your response in Markdown. Be enthusiastic and provide practical, budget-conscious tips where possible, with all cost estimates and budget considerations in Indian Rupees (INR). Start with a catchy title for the trip. Include a mix of activities, food suggestions, and local transport tips.";
+            
+            const userQuery = `Please create a ${duration}-day travel itinerary for ${destination}. 
+My budget is ${budget} (in Indian Rupees - INR). 
+My interests are: ${interests}.
+Provide a day-by-day plan. For each day, suggest activities, food options (mentioning budget-friendly choices), and estimated local transport ideas (like using public transport, walking, etc.). 
+Make the plan exciting and easy to follow.`;
+
+            const apiKey = ""; // API key will be provided by the environment
+            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
+
+            const payload = {
+                contents: [{ parts: [{ text: userQuery }] }],
+                systemInstruction: {
+                    parts: [{ text: systemPrompt }]
+                },
+                generationConfig: {
+                    temperature: 0.7,
+                    topP: 0.95,
+                    topK: 40,
+                }
+            };
+
+            let attempt = 0;
+            const maxAttempts = 3;
+            let delay = 1000; // Start with 1 second
+
+            while (attempt < maxAttempts) {
+                try {
+                    const response = await fetch(apiUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+
+                    const result = await response.json();
+                    
+                    if (result.candidates && result.candidates[0].content?.parts?.[0]?.text) {
+                        return result.candidates[0].content.parts[0].text;
+                    } else {
+                        throw new Error("Invalid response structure from API.");
+                    }
+
+                } catch (error) {
+                    console.warn(`Attempt ${attempt + 1} failed. Retrying in ${delay}ms...`, error);
+                    attempt++;
+                    if (attempt >= maxAttempts) {
+                        throw new Error("Failed to generate itinerary after multiple attempts.");
+                    }
+                    await new Promise(resolve => setTimeout(resolve, delay));
+                    delay *= 2; // Exponential backoff
+                }
+            }
+        }
+    </script>
+</body>
+</html>
+
